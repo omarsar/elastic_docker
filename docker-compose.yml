@@ -1,0 +1,99 @@
+version: '2.2'
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.1.1
+    container_name: elasticsearch
+    environment:
+      - node.name=node1
+      - discovery.seed_hosts=elasticsearch2
+      - cluster.initial_master_nodes=node1,nodes2,node3
+      - cluster.name=my_cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "XPACK_SECURITY_ENABLED=false"
+      - "XPACK_REPORTING_ENABLED=false"
+      - "XPACK_MONITORING_ENABLED=false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - esnet
+  elasticsearch2:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.1.1
+    container_name: elasticsearch2
+    environment:
+      - node.name=node2
+      - discovery.seed_hosts=elasticsearch
+      - cluster.initial_master_nodes=node1,node2,node3
+      - cluster.name=my_cluster
+    volumes:
+      - esdata02:/usr/share/elasticsearch/data
+    networks:
+      - esnet
+  elasticsearch3:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.1.1
+    container_name: elasticsearch3
+    environment:
+      - node.name=node3
+      - discovery.seed_hosts=elasticsearch
+      - cluster.initial_master_nodes=node1
+      - cluster.name=my_cluster
+    volumes:
+      - esdata03:/usr/share/elasticsearch/data
+    networks:
+      - esnet
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.1.1
+    ports: 
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    networks:
+      - esnet
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.1.1
+    volumes:
+      - ldata:/usr/share/logstash/pipeline
+    command: logstash -f /usr/share/logstash/pipeline/blogs_csv.conf
+    environment:
+       - "XPACK_MONITORING_ENABLED=true"
+       - "ELASTIC_HOST=elasticsearch:9200"
+       - "XPACK_SECURITY_ENABLED=false"
+       - "XPACK_REPORTING_ENABLED=false"
+       - xpack.monitoring.elasticsearch.hosts=http://elasticsearch:9200
+    depends_on: ['elasticsearch']
+    networks:
+      - esnet
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.1.1
+    volumes:
+      - fbdata:/usr/share/filebeat/data/datasets
+    command: filebeat -c /usr/share/filebeat/data/datasets/filebeat2.yml
+    user: root
+    environment:
+      - "XPACK_MONITORING_ENABLED=true"
+      - "ELASTIC_HOST=elasticsearch:9200"
+      - "XPACK_SECURITY_ENABLED=false"
+      - "XPACK_REPORTING_ENABLED=false"
+      - xpack.monitoring.elasticsearch.hosts=http://elasticsearch:9200
+    depends_on: ['elasticsearch']
+    networks:
+      - esnet
+volumes:
+  esdata01:
+    driver: local
+  esdata02:
+    driver: local
+  esdata03:
+    driver: local
+  ldata:
+    driver: local
+  fbdata:
+    driver: local
+networks:
+  esnet:
